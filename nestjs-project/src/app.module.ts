@@ -8,9 +8,11 @@ import appConfig from './config/app.config';
 import authConfig from './config/auth.config';
 import databaseConfig from './config/database.config';
 import mailConfig from './config/mail.config';
+import queueConfig from './config/queue.config';
 import storageConfig from './config/storage.config';
 import swaggerConfig from './config/swagger.config';
 import { envValidationSchema } from './config/env.validation';
+import { QueueModule } from './queue/queue.module';
 import { StorageModule } from './storage/storage.module';
 
 @Module({
@@ -22,6 +24,7 @@ import { StorageModule } from './storage/storage.module';
         authConfig,
         databaseConfig,
         mailConfig,
+        queueConfig,
         storageConfig,
         swaggerConfig,
       ],
@@ -43,6 +46,7 @@ import { StorageModule } from './storage/storage.module';
       }),
     }),
     AuthModule,
+    QueueModule,
     StorageModule,
   ],
   controllers: [AppController],
