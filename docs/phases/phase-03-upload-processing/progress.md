@@ -1,7 +1,7 @@
 # phase-03-upload-processing — Progress
 
 **Status:** in_progress
-**SIs:** 4/8 completed
+**SIs:** 5/8 completed
 
 ### SI-03.1 — Infra: storage client (AWS SDK v3) + módulo
 - **Status:** completed
@@ -38,9 +38,14 @@
   - `VideoTooLargeException` adicionada ao arquivo compartilhado `common/exceptions/domain.exception.ts`, seguindo o padrão existente (auth) em vez de criar arquivo de exceção por módulo.
 
 ### SI-03.5 — VideosController: POST /videos, POST /videos/:id/complete
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 5 passing (e2e)
+- **Observations:**
+  - Adicionado `ChannelsService.findByUserId(userId)` — não existia método pra resolver o canal do usuário autenticado, necessário pra "dono = canal do usuário" (owner resolution) nos dois endpoints.
+  - Spec previa status `draft/uploading` para permitir completar o upload, mas o enum `VideoStatus` real (SI-03.3) só tem `draft/processing/ready/failed` — condição adaptada pra checar apenas `status === DRAFT`.
+  - `POST /videos/:id/complete` precisou de `@HttpCode(200)` explícito — default do Nest pra `@Post` é 201, mas o spec define 200 pra esse endpoint.
+  - `upload_id` zerado (`null`) ao completar, conforme TD-05 ("cleared after CompleteMultipartUpload").
+  - Se `findByUserId` retornar `null` (não deveria acontecer — todo usuário ganha canal automaticamente no registro), lança `Error` genérico (500) em vez de exceção de domínio — não é um caso previsto no Error Catalog da spec, é invariante do sistema.
 
 ### SI-03.6 — Video Worker: app standalone + consumer da fila
 - **Status:** pending

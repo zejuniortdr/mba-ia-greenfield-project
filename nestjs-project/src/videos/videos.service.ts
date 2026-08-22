@@ -1,19 +1,37 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { VideoTooLargeException } from '../common/exceptions/domain.exception';
-import { StorageService, UploadPart } from '../storage/storage.service';
+import {
+  VideoNotFoundException,
+  VideoTooLargeException,
+  VideoUploadAlreadyCompletedException,
+} from '../common/exceptions/domain.exception';
+import { QueueService } from '../queue/queue.service';
+import {
+  CompletedPart,
+  StorageService,
+  UploadPart,
+} from '../storage/storage.service';
+import { CompleteUploadDto } from './dto/complete-upload.dto';
 import { CreateVideoDto } from './dto/create-video.dto';
 import { Video } from './entities/video.entity';
+import { VideoStatus } from './entities/video-status.enum';
 import {
   MAX_VIDEO_SIZE_BYTES,
   UPLOAD_PART_SIZE_BYTES,
 } from './videos.constants';
 
+const VIDEO_PROCESSING_REQUESTED_EVENT = 'video.processing.requested';
+
 export interface InitiateUploadResult {
   id: string;
   uploadId: string;
   parts: UploadPart[];
+}
+
+export interface CompleteUploadResult {
+  id: string;
+  status: VideoStatus;
 }
 
 @Injectable()
@@ -22,6 +40,7 @@ export class VideosService {
     @InjectRepository(Video)
     private readonly videoRepository: Repository<Video>,
     private readonly storageService: StorageService,
+    private readonly queueService: QueueService,
   ) {}
 
   async initiateUpload(
@@ -53,5 +72,41 @@ export class VideosService {
     await this.videoRepository.save(video);
 
     return { id: video.id, uploadId, parts };
+  }
+
+  async completeUpload(
+    id: string,
+    channelId: string,
+    dto: CompleteUploadDto,
+  ): Promise<CompleteUploadResult> {
+    const video = await this.videoRepository.findOne({
+      where: { id, channel_id: channelId },
+    });
+    if (!video) {
+      throw new VideoNotFoundException();
+    }
+    if (video.status !== VideoStatus.DRAFT) {
+      throw new VideoUploadAlreadyCompletedException();
+    }
+
+    const parts: CompletedPart[] = dto.parts.map((part) => ({
+      partNumber: part.partNumber,
+      etag: part.etag,
+    }));
+    await this.storageService.completeMultipartUpload(
+      video.storage_key as string,
+      video.upload_id as string,
+      parts,
+    );
+
+    video.status = VideoStatus.PROCESSING;
+    video.upload_id = null;
+    await this.videoRepository.save(video);
+
+    await this.queueService.publish(VIDEO_PROCESSING_REQUESTED_EVENT, {
+      videoId: video.id,
+    });
+
+    return { id: video.id, status: video.status };
   }
 }
