@@ -19,9 +19,8 @@ import { VideoStatus } from './entities/video-status.enum';
 import {
   MAX_VIDEO_SIZE_BYTES,
   UPLOAD_PART_SIZE_BYTES,
+  VIDEO_PROCESSING_REQUESTED_EVENT,
 } from './videos.constants';
-
-const VIDEO_PROCESSING_REQUESTED_EVENT = 'video.processing.requested';
 
 export interface InitiateUploadResult {
   id: string;

@@ -1,7 +1,7 @@
 # phase-03-upload-processing — Progress
 
 **Status:** in_progress
-**SIs:** 5/8 completed
+**SIs:** 6/8 completed
 
 ### SI-03.1 — Infra: storage client (AWS SDK v3) + módulo
 - **Status:** completed
@@ -48,9 +48,15 @@
   - Se `findByUserId` retornar `null` (não deveria acontecer — todo usuário ganha canal automaticamente no registro), lança `Error` genérico (500) em vez de exceção de domínio — não é um caso previsto no Error Catalog da spec, é invariante do sistema.
 
 ### SI-03.6 — Video Worker: app standalone + consumer da fila
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** no tests (SI de infra — comportamento do consumer testado em SI-03.7)
+- **Observations:**
+  - `WorkerModule` precisou importar `UsersModule` (não só `TypeOrmModule.forFeature([Video])`) — `Video` tem relação com `Channel`, que por sua vez tem relação com `User`; sem o módulo dono de cada entidade relacionada registrado, TypeORM falha em runtime com `Entity metadata for X was not found` (regra de `.claude/rules/nestjs-modules.md`: toda entidade precisa estar registrada via `forFeature` do seu módulo dono). `UsersModule` já importa `ChannelsModule`, então uma única importação resolveu a cadeia toda.
+  - Movida a constante `VIDEO_PROCESSING_REQUESTED_EVENT` (antes local em `videos.service.ts`) para `videos.constants.ts`, compartilhada entre produtor (`VideosService`) e consumidor (`worker.main.ts`) — evita duplicar o literal do nome do evento.
+  - `start:worker` usa `nest start --watch --entryFile worker.main` (flag `--entryFile` do Nest CLI), espelhando o padrão de `start:dev`.
+  - `Dockerfile.worker` roda o processo diretamente (`CMD npm run start:worker`), diferente do `Dockerfile.dev` da API que fica ocioso (`tail -f /dev/null`) — decisão necessária pro worker ser um processo sempre ativo, não uma sessão de dev manual.
+  - Verificado empiricamente: subindo o container, o worker consumiu e logou 4 jobs `video.processing.requested` que já estavam na fila desde execuções anteriores dos testes e2e da SI-03.5 — confirma que o consumer registrado via `QueueService.subscribe` funciona de ponta a ponta.
+  - Binário `ffmpeg`/`ffprobe` na imagem do worker fica pra SI-03.7 (escopo explícito dessa SI, não desta).
 
 ### SI-03.7 — Worker: extração de metadados e thumbnail (fluent-ffmpeg)
 - **Status:** pending
