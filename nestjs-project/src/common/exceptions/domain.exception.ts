@@ -70,3 +70,9 @@ export class VideoUploadAlreadyCompletedException extends DomainException {
     );
   }
 }
+
+export class VideoUploadNotCompleteException extends DomainException {
+  constructor() {
+    super('VIDEO_UPLOAD_NOT_COMPLETE', 409, 'Video is not ready yet');
+  }
+}

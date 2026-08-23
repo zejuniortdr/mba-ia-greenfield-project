@@ -5,6 +5,7 @@ import {
   VideoNotFoundException,
   VideoTooLargeException,
   VideoUploadAlreadyCompletedException,
+  VideoUploadNotCompleteException,
 } from '../common/exceptions/domain.exception';
 import { QueueService } from '../queue/queue.service';
 import {
@@ -107,5 +108,29 @@ export class VideosService {
     });
 
     return { id: video.id, status: video.status };
+  }
+
+  private async findReadyVideoOrThrow(id: string): Promise<Video> {
+    const video = await this.videoRepository.findOne({ where: { id } });
+    if (!video) {
+      throw new VideoNotFoundException();
+    }
+    if (video.status !== VideoStatus.READY) {
+      throw new VideoUploadNotCompleteException();
+    }
+    return video;
+  }
+
+  async getStreamUrl(id: string): Promise<{ url: string; expiresAt: Date }> {
+    const video = await this.findReadyVideoOrThrow(id);
+    return this.storageService.getPresignedGetUrl(video.storage_key as string);
+  }
+
+  async getDownloadUrl(id: string): Promise<{ url: string; expiresAt: Date }> {
+    const video = await this.findReadyVideoOrThrow(id);
+    return this.storageService.getPresignedGetUrl(
+      video.storage_key as string,
+      { attachment: true },
+    );
   }
 }
