@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Param,
@@ -17,6 +18,7 @@ import type { JwtPayload } from '../auth/auth.types';
 import { ChannelsService } from '../channels/channels.service';
 import { ApiErrorEnvelope } from '../common/openapi/api-error-envelope.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 import { CompleteUploadDto } from './dto/complete-upload.dto';
 import { CreateVideoDto } from './dto/create-video.dto';
 import {
@@ -123,5 +125,71 @@ export class VideosController {
       throw new Error(`No channel found for user ${user.sub}`);
     }
     return this.videosService.completeUpload(id, channel.id, dto);
+  }
+
+  @Get(':id/stream-url')
+  @Public()
+  @ApiOperation({
+    summary: 'Get a presigned streaming URL',
+    description:
+      'Returns a presigned GET URL (with Range support) for the video file. Public — no authentication required.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Presigned streaming URL',
+    schema: {
+      properties: {
+        url: { type: 'string' },
+        expiresAt: { type: 'string', format: 'date-time' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Video not found',
+    schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Video upload is not complete yet',
+    schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
+  })
+  async streamUrl(
+    @Param('id') id: string,
+  ): Promise<{ url: string; expiresAt: Date }> {
+    return this.videosService.getStreamUrl(id);
+  }
+
+  @Get(':id/download-url')
+  @Public()
+  @ApiOperation({
+    summary: 'Get a presigned download URL',
+    description:
+      'Returns a presigned GET URL with Content-Disposition: attachment for the video file. Public — no authentication required.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Presigned download URL',
+    schema: {
+      properties: {
+        url: { type: 'string' },
+        expiresAt: { type: 'string', format: 'date-time' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Video not found',
+    schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Video upload is not complete yet',
+    schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
+  })
+  async downloadUrl(
+    @Param('id') id: string,
+  ): Promise<{ url: string; expiresAt: Date }> {
+    return this.videosService.getDownloadUrl(id);
   }
 }
