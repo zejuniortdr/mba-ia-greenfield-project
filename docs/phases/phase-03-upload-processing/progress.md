@@ -1,7 +1,7 @@
 # phase-03-upload-processing — Progress
 
 **Status:** in_progress
-**SIs:** 6/8 completed
+**SIs:** 7/8 completed
 
 ### SI-03.1 — Infra: storage client (AWS SDK v3) + módulo
 - **Status:** completed
@@ -46,6 +46,7 @@
   - `POST /videos/:id/complete` precisou de `@HttpCode(200)` explícito — default do Nest pra `@Post` é 201, mas o spec define 200 pra esse endpoint.
   - `upload_id` zerado (`null`) ao completar, conforme TD-05 ("cleared after CompleteMultipartUpload").
   - Se `findByUserId` retornar `null` (não deveria acontecer — todo usuário ganha canal automaticamente no registro), lança `Error` genérico (500) em vez de exceção de domínio — não é um caso previsto no Error Catalog da spec, é invariante do sistema.
+  - **Regressão encontrada e corrigida durante SI-03.7** (full suite): esta SI adicionou `QueueService` ao construtor de `VideosService` mas não atualizou `videos.service.spec.ts`/`videos.service.integration-spec.ts` com o provider correspondente — 5 testes quebrados por erro de DI (`Nest can't resolve dependencies... QueueService`). Corrigido adicionando mock (`unit`) e `QueueModule` real (`integration`) nesses dois arquivos. Suíte completa voltou a 164/164.
 
 ### SI-03.6 — Video Worker: app standalone + consumer da fila
 - **Status:** completed
@@ -59,9 +60,15 @@
   - Binário `ffmpeg`/`ffprobe` na imagem do worker fica pra SI-03.7 (escopo explícito dessa SI, não desta).
 
 ### SI-03.7 — Worker: extração de metadados e thumbnail (fluent-ffmpeg)
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 5 passing (2 unit + 3 integration)
+- **Observations:**
+  - Binário `ffmpeg` precisou ser instalado também no `Dockerfile.dev` (não só no `Dockerfile.worker`) — a suíte de testes roda dentro do container `nestjs-api` por convenção do projeto (`docker compose exec nestjs-api npm test`), e o teste de integração desta SI chama `ffmpeg`/`ffprobe` de verdade.
+  - Adicionado `StorageService.getObject(key)` (download) — não existia método de leitura, só upload/presign; necessário pro `VideoProcessingService` baixar o vídeo original antes de processar.
+  - Extraído `calculateThumbnailTimestamp(durationSeconds)` como função pura exportada (10% da duração, fallback 0 pra vídeos <2s) — permite testar a regra de negócio no unit test sem precisar de ffmpeg real ou mocks pesados.
+  - Teste de integração gera vídeos sintéticos on-the-fly via `ffmpeg -f lavfi testsrc=...` (sem fixture binário versionado no repo) — evita commitar arquivo de vídeo de teste.
+  - `VideoProcessingService.process` segue a regra de "background task" de `.claude/rules/nestjs-services.md`: captura erro, marca `status: failed`, loga e NÃO relança — condizente com o worker não poder cair por causa de um vídeo corrompido (AC explícita da SI).
+  - `worker.main.ts` (SI-03.6) atualizado: handler do consumer agora chama `VideoProcessingService.process(videoId)` de verdade, em vez do placeholder de log.
 
 ### SI-03.8 — VideosService + Controller: streaming e download público
 - **Status:** pending

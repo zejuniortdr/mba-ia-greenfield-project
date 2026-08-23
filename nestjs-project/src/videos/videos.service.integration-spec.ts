@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { Test } from '@nestjs/testing';
 import { DataSource, Repository } from 'typeorm';
 import appConfig from '../config/app.config';
+import queueConfig from '../config/queue.config';
 import storageConfig from '../config/storage.config';
 import { Channel } from '../channels/entities/channel.entity';
 import { RefreshToken } from '../auth/entities/refresh-token.entity';
@@ -12,6 +13,7 @@ import {
   createTestDataSource,
 } from '../test/create-test-data-source';
 import { User } from '../users/entities/user.entity';
+import { QueueModule } from '../queue/queue.module';
 import { StorageModule } from '../storage/storage.module';
 import { VideoTooLargeException } from '../common/exceptions/domain.exception';
 import { Video } from './entities/video.entity';
@@ -38,9 +40,10 @@ describe('VideosService (integration)', () => {
       imports: [
         ConfigModule.forRoot({
           isGlobal: true,
-          load: [appConfig, storageConfig],
+          load: [appConfig, storageConfig, queueConfig],
         }),
         StorageModule,
+        QueueModule,
       ],
       providers: [
         VideosService,

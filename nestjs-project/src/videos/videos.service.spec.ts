@@ -2,6 +2,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { Test } from '@nestjs/testing';
 import { Repository } from 'typeorm';
 import { VideoTooLargeException } from '../common/exceptions/domain.exception';
+import { QueueService } from '../queue/queue.service';
 import { StorageService } from '../storage/storage.service';
 import { Video } from './entities/video.entity';
 import { VideosService } from './videos.service';
@@ -26,6 +27,12 @@ describe('VideosService — initiateUpload', () => {
           provide: StorageService,
           useValue: {
             createMultipartUpload: jest.fn(),
+          },
+        },
+        {
+          provide: QueueService,
+          useValue: {
+            publish: jest.fn(),
           },
         },
       ],

@@ -9,6 +9,7 @@ import { QueueModule } from './queue/queue.module';
 import { StorageModule } from './storage/storage.module';
 import { UsersModule } from './users/users.module';
 import { Video } from './videos/entities/video.entity';
+import { VideoProcessingService } from './videos/video-processing.service';
 
 @Module({
   imports: [
@@ -37,5 +38,7 @@ import { Video } from './videos/entities/video.entity';
     QueueModule,
     StorageModule,
   ],
+  providers: [VideoProcessingService],
+  exports: [VideoProcessingService],
 })
 export class WorkerModule {}

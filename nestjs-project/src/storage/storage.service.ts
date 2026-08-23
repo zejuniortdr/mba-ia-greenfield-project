@@ -90,6 +90,17 @@ export class StorageService {
     );
   }
 
+  async getObject(key: string): Promise<Buffer> {
+    const response = await this.client.send(
+      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+    );
+    const chunks: Buffer[] = [];
+    for await (const chunk of response.Body as AsyncIterable<Buffer>) {
+      chunks.push(chunk);
+    }
+    return Buffer.concat(chunks);
+  }
+
   async putObject(
     key: string,
     body: Buffer,
