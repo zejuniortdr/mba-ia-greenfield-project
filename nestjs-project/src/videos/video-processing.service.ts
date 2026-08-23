@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
+import { mkdtemp, readFile, rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { Injectable, Logger } from '@nestjs/common';
@@ -40,13 +40,14 @@ export class VideoProcessingService {
 
     let workDir: string | undefined;
     try {
+      if (!video.storage_key) {
+        throw new Error(`Video ${videoId} has no storage_key`);
+      }
+
       workDir = await mkdtemp(join(tmpdir(), 'video-processing-'));
       const inputPath = join(workDir, 'original');
 
-      const originalBuffer = await this.storageService.getObject(
-        video.storage_key as string,
-      );
-      await writeFile(inputPath, originalBuffer);
+      await this.storageService.downloadToFile(video.storage_key, inputPath);
 
       const duration = await this.probeDuration(inputPath);
       const timestamp = calculateThumbnailTimestamp(duration);
@@ -69,8 +70,15 @@ export class VideoProcessingService {
         `Failed to process video ${videoId}`,
         error instanceof Error ? error.stack : String(error),
       );
-      video.status = VideoStatus.FAILED;
-      await this.videoRepository.save(video);
+      try {
+        video.status = VideoStatus.FAILED;
+        await this.videoRepository.save(video);
+      } catch (saveError) {
+        this.logger.error(
+          `Failed to persist failed status for video ${videoId}`,
+          saveError instanceof Error ? saveError.stack : String(saveError),
+        );
+      }
     } finally {
       if (workDir) {
         await rm(workDir, { recursive: true, force: true });
@@ -85,7 +93,12 @@ export class VideoProcessingService {
           reject(err instanceof Error ? err : new Error(String(err)));
           return;
         }
-        resolve(metadata.format.duration ?? 0);
+        const duration = metadata.format.duration;
+        if (duration === undefined || duration === null) {
+          reject(new Error(`ffprobe returned no duration for ${inputPath}`));
+          return;
+        }
+        resolve(duration);
       });
     });
   }

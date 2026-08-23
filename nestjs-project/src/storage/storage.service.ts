@@ -1,3 +1,6 @@
+import { createWriteStream } from 'fs';
+import { Readable } from 'stream';
+import { pipeline } from 'stream/promises';
 import {
   CompleteMultipartUploadCommand,
   CreateMultipartUploadCommand,
@@ -94,11 +97,24 @@ export class StorageService {
     const response = await this.client.send(
       new GetObjectCommand({ Bucket: this.bucket, Key: key }),
     );
-    const chunks: Buffer[] = [];
-    for await (const chunk of response.Body as AsyncIterable<Buffer>) {
-      chunks.push(chunk);
+    if (!response.Body) {
+      throw new Error(`Object not found or has an empty body: ${key}`);
     }
-    return Buffer.concat(chunks);
+    const bytes = await response.Body.transformToByteArray();
+    return Buffer.from(bytes);
+  }
+
+  async downloadToFile(key: string, destinationPath: string): Promise<void> {
+    const response = await this.client.send(
+      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+    );
+    if (!response.Body) {
+      throw new Error(`Object not found or has an empty body: ${key}`);
+    }
+    await pipeline(
+      response.Body as Readable,
+      createWriteStream(destinationPath),
+    );
   }
 
   async putObject(
