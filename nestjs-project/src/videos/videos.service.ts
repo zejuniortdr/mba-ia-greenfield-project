@@ -128,9 +128,8 @@ export class VideosService {
 
   async getDownloadUrl(id: string): Promise<{ url: string; expiresAt: Date }> {
     const video = await this.findReadyVideoOrThrow(id);
-    return this.storageService.getPresignedGetUrl(
-      video.storage_key as string,
-      { attachment: true },
-    );
+    return this.storageService.getPresignedGetUrl(video.storage_key as string, {
+      attachment: true,
+    });
   }
 }
