@@ -1,5 +1,7 @@
 # StreamTube — Plataforma de Compartilhamento de Vídeos
 
+[![test](https://github.com/zejuniortdr/mba-ia-greenfield-project/actions/workflows/test.yml/badge.svg)](https://github.com/zejuniortdr/mba-ia-greenfield-project/actions/workflows/test.yml)
+
 Projeto da disciplina **Desenvolvimento de Aplicações de IA** do MBA de Engenharia de Software com IA da [Full Cycle](https://fullcycle.com.br).
 
 Este é um projeto greenfield desenvolvido para demonstrar como construir uma aplicação do zero utilizando IA de forma adequada no processo de desenvolvimento.
