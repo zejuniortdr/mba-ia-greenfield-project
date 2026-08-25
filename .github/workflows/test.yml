@@ -1,0 +1,98 @@
+name: test
+
+on:
+  pull_request:
+    branches: [main, dev]
+
+defaults:
+  run:
+    working-directory: nestjs-project
+
+env:
+  NODE_ENV: test
+  DB_HOST: localhost
+  DB_PORT: 5432
+  DB_USERNAME: streamtube
+  DB_PASSWORD: streamtube
+  DB_NAME: streamtube
+  JWT_SECRET: test-secret
+  JWT_REFRESH_SECRET: test-refresh-secret
+  JWT_ACCESS_EXPIRATION: 15m
+  JWT_REFRESH_EXPIRATION: 7d
+  CONFIRMATION_TOKEN_EXPIRATION_HOURS: 1
+  PASSWORD_RESET_TOKEN_EXPIRATION_HOURS: 1
+  MAIL_HOST: localhost
+  MAIL_PORT: 1025
+  MAIL_FROM: "StreamTube <noreply@streamtube.com>"
+  STORAGE_ENDPOINT: http://localhost:9000
+  STORAGE_PUBLIC_ENDPOINT: http://localhost:9000
+  STORAGE_REGION: us-east-1
+  STORAGE_BUCKET: streamtube-videos
+  STORAGE_ACCESS_KEY_ID: streamtube
+  STORAGE_SECRET_ACCESS_KEY: streamtube123
+  STORAGE_FORCE_PATH_STYLE: "true"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      db:
+        image: postgres:17
+        env:
+          POSTGRES_USER: streamtube
+          POSTGRES_PASSWORD: streamtube
+          POSTGRES_DB: streamtube
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U streamtube"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+      mailpit:
+        image: axllent/mailpit
+        ports:
+          - 1025:1025
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: nestjs-project/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=streamtube \
+            -e MINIO_ROOT_PASSWORD=streamtube123 \
+            minio/minio server /data
+          curl -sL https://dl.min.io/client/mc/release/linux-amd64/mc -o /usr/local/bin/mc
+          chmod +x /usr/local/bin/mc
+          timeout 30 sh -c 'until mc alias set local http://localhost:9000 streamtube streamtube123; do sleep 1; done'
+          mc mb -p local/streamtube-videos
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Run migrations
+        run: npm run migration:run
+
+      - name: Unit and integration tests
+        run: npm test
+
+      - name: E2E tests
+        run: npm run test:e2e
