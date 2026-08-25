@@ -1,5 +1,11 @@
 # StreamTube — Plataforma de Compartilhamento de Vídeos
 
+[![test](https://github.com/zejuniortdr/mba-ia-greenfield-project/actions/workflows/test.yml/badge.svg)](https://github.com/zejuniortdr/mba-ia-greenfield-project/actions/workflows/test.yml) [![codecov](https://codecov.io/gh/zejuniortdr/mba-ia-greenfield-project/branch/main/graph/badge.svg)](https://codecov.io/gh/zejuniortdr/mba-ia-greenfield-project)
+
+![NestJS](https://img.shields.io/badge/NestJS-11-E0234E?logo=nestjs&logoColor=white) ![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs&logoColor=white) ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white) ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white) ![Fase 03](https://img.shields.io/badge/Fase%2003-conclu%C3%ADda-success)
+
+
+
 Projeto da disciplina **Desenvolvimento de Aplicações de IA** do MBA de Engenharia de Software com IA da [Full Cycle](https://fullcycle.com.br).
 
 Este é um projeto greenfield desenvolvido para demonstrar como construir uma aplicação do zero utilizando IA de forma adequada no processo de desenvolvimento.
@@ -45,9 +51,9 @@ O projeto é um monorepo baseado em containers Docker. Cada subprojeto sobe sua 
 - **API** (NestJS 11) — regras de negócio, autenticação (JWT + refresh token rotation), envio de e-mails e acesso ao banco.
 - **Database** (PostgreSQL 17) — usuários, canais e tokens de autenticação.
 - **Email Service** (Mailpit) — captura os e-mails transacionais (confirmação de conta e recuperação de senha) em uma UI local.
-- **Video Worker** (FFmpeg) — processamento de vídeos *(planejado — Fase 03)*.
-- **Object Storage** (S3/MinIO) — arquivos de vídeo e thumbnails *(planejado — Fase 03)*.
-- **Message Queue** — fila de processamento de vídeos *(planejado — Fase 03)*.
+- **Video Worker** (FFmpeg) — aplicação Nest standalone que consome a fila, extrai duração/metadados e gera a thumbnail.
+- **Object Storage** (MinIO, compatível com S3) — arquivos de vídeo e thumbnails, acessados por URLs presignadas.
+- **Message Queue** (pg-boss) — fila de processamento de vídeos sobre o próprio PostgreSQL, sem broker separado.
 
 O diagrama de arquitetura completo (C4) está em `docs/diagrams/software-arch.mermaid`.
 
@@ -124,7 +130,7 @@ Sufixos: `*.test.ts(x)` (unitário), `*.integration.test.ts(x)` (Route Handlers 
 
 ## ✅ Funcionalidades implementadas
 
-**Fase 01 — Configuração base** e **Fase 02 — Autenticação** estão concluídas (backend + frontend).
+**Fase 01 — Configuração base** e **Fase 02 — Autenticação** estão concluídas (backend + frontend). A **Fase 03 — Upload e Processamento de Vídeos** está concluída no backend (a interface de vídeo fica para a fase de frontend correspondente).
 
 ### Autenticação (Fase 02)
 
@@ -150,6 +156,118 @@ Telas e Route Handlers BFF (`next-frontend`):
 - `app/api/auth/{signup,login,logout,forgot-password}` — proxy same-origin para a API.
 
 Segurança: senhas com **Argon2**, **JWT** com `JwtAuthGuard` global (opt-out via `@Public()`), **rotação de refresh token** com detecção de reuso, **rate limiting** (`ThrottlerGuard`) nos endpoints de auth, e sessão no navegador via **iron-session** (cookies HTTP-only).
+
+### Upload e Processamento de Vídeos (Fase 03)
+
+Upload de arquivos de até **10GB sem passar pela API**: o cliente recebe URLs presignadas e envia as partes direto ao object storage. Concluído o upload, um evento entra na fila e o worker processa o vídeo em background.
+
+Endpoints da API (`nestjs-project`):
+
+| Método & Rota | Auth | Descrição |
+|---------------|------|-----------|
+| `POST /videos` | Bearer | Cria o vídeo como rascunho e inicia o multipart upload, devolvendo uma URL presignada por parte |
+| `POST /videos/:id/complete` | Bearer | Fecha o multipart upload, move para `processing` e publica `video.processing.requested` |
+| `GET /videos/:id/stream-url` | pública | URL presignada para streaming, com suporte a `Range` |
+| `GET /videos/:id/download-url` | pública | URL presignada com `Content-Disposition: attachment` |
+
+Ciclo de status do vídeo: `draft → processing → ready | failed`.
+
+Infraestrutura da fase (via `docker compose`): **MinIO** (object storage + bootstrap do bucket), **pg-boss** (fila sobre o PostgreSQL existente) e **video-worker** (container próprio com FFmpeg).
+
+## 📑 Documentação da API (Swagger)
+
+Com `SWAGGER_ENABLED=true` no `.env` (já é o padrão do `.env.example`), a documentação interativa de todos os endpoints fica em **http://localhost:3000/api/docs**.
+
+O contrato também é versionado em `nestjs-project/openapi.json`, regerável com `npm run openapi:export`.
+
+## 🧪 Testando a Fase 03 ponta a ponta
+
+Roteiro manual do fluxo completo — upload real, processamento pelo worker, streaming e download. Todos os comandos abaixo rodam a partir de `nestjs-project/`.
+
+**1. Suba a stack e a API**
+
+```bash
+cp .env.example .env                                  # apenas na primeira vez
+docker compose up -d                                  # db, mailpit, minio, minio-init, video-worker
+docker compose exec nestjs-api npm ci                 # apenas na primeira vez
+docker compose exec nestjs-api npm run migration:run
+docker compose exec nestjs-api npm run start:dev      # deixe rodando neste terminal
+```
+
+O container `nestjs-api` sobe ocioso — a API precisa ser iniciada pelo comando acima. O `video-worker` já sobe rodando sozinho.
+
+**2. Gere um vídeo de teste** (o FFmpeg vive no container)
+
+```bash
+docker compose exec nestjs-api sh -c \
+  'mkdir -p /tmp/vt && ffmpeg -y -f lavfi -i testsrc=size=640x360:rate=25 -t 8 \
+   -c:v libx264 -pix_fmt yuv420p /tmp/vt/sample.mp4'
+docker compose cp nestjs-api:/tmp/vt/sample.mp4 /tmp/sample.mp4
+```
+
+**3. Crie a conta e autentique** (o token de confirmação chega no Mailpit, em http://localhost:8025)
+
+```bash
+API=http://localhost:3000
+EMAIL="teste_$(date +%s)@example.com"; PASS=password123
+
+curl -s -X POST $API/auth/register -H 'Content-Type: application/json' \
+  -d "{\"email\":\"$EMAIL\",\"password\":\"$PASS\"}"
+
+ID=$(curl -s http://localhost:8025/api/v1/messages | jq -r '.messages[0].ID')
+CONF=$(curl -s "http://localhost:8025/api/v1/message/$ID" | jq -r '.Text // .HTML' \
+       | grep -oE 'token=[A-Za-z0-9_-]+' | head -1 | cut -d= -f2)
+curl -s "$API/auth/confirm-email?token=$CONF"
+
+ACCESS=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' \
+  -d "{\"email\":\"$EMAIL\",\"password\":\"$PASS\"}" | jq -r .access_token)
+```
+
+**4. Faça o upload** — o arquivo vai direto ao MinIO, sem passar pela API
+
+```bash
+SIZE=$(stat -c%s /tmp/sample.mp4)
+INIT=$(curl -s -X POST $API/videos -H "Authorization: Bearer $ACCESS" \
+  -H 'Content-Type: application/json' \
+  -d "{\"title\":\"Teste manual\",\"sizeBytes\":$SIZE,\"mimeType\":\"video/mp4\"}")
+
+VID=$(echo "$INIT" | jq -r .id)
+PUT=$(echo "$INIT" | jq -r '.parts[0].url')
+
+ETAG=$(curl -s -X PUT --upload-file /tmp/sample.mp4 -H 'Content-Type: video/mp4' \
+       -D - "$PUT" -o /dev/null | grep -i '^etag:' | tr -d '\r' | awk '{print $2}')
+
+curl -s -X POST $API/videos/$VID/complete -H "Authorization: Bearer $ACCESS" \
+  -H 'Content-Type: application/json' \
+  -d "{\"parts\":[{\"partNumber\":1,\"etag\":$ETAG}]}"
+```
+
+As partes têm 100MB. Um arquivo menor que isso gera uma única parte, como acima; para arquivos grandes, itere sobre `parts[]` enviando cada faixa de bytes e junte todos os ETags no `complete`.
+
+**5. Acompanhe o worker processar**
+
+```bash
+docker compose logs -f video-worker
+
+docker compose exec db psql -U streamtube -c \
+  "select status, duration_seconds, thumbnail_key from videos where id='$VID'"
+```
+
+O vídeo deve chegar em `ready`, com `duration_seconds` batendo com a duração real e `thumbnail_key` preenchida.
+
+**6. Verifique streaming e download**
+
+```bash
+STREAM=$(curl -s $API/videos/$VID/stream-url | jq -r .url)
+curl -s -o /dev/null -D - -H 'Range: bytes=0-1023' "$STREAM" | head -5
+
+DL=$(curl -s $API/videos/$VID/download-url | jq -r .url)
+curl -s -o /dev/null -D - "$DL" | grep -i content-disposition
+```
+
+Esperado: `HTTP/1.1 206 Partial Content` com `Content-Range` (streaming sem baixar o arquivo inteiro) e `Content-Disposition: attachment` (download). A URL de streaming também toca direto em um `<video>` no navegador.
+
+Os objetos no storage são privados: acessar o MinIO diretamente devolve `403`, e todo acesso legítimo passa por URL presignada. O console do MinIO fica em http://localhost:9001 (`streamtube` / `streamtube123`).
 
 ## 🛠️ Estrutura do Projeto
 
@@ -195,7 +313,7 @@ green-field-ia-project/
 |------|-----------|--------|
 | **01** | Configuração Base do Projeto | ✅ Concluída |
 | **02** | Cadastro, Login e Gerenciamento de Conta | ✅ Concluída |
-| **03** | Upload e Processamento de Vídeos | ⏳ Planejada |
+| **03** | Upload e Processamento de Vídeos | ✅ Concluída |
 | **04** | Gerenciamento de Vídeos e Canal | ⏳ Planejada |
 | **05** | Página de Visualização do Vídeo | ⏳ Planejada |
 | **06** | Interações Sociais (Likes, Comentários, Inscrições) | ⏳ Planejada |
