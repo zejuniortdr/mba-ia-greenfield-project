@@ -13,6 +13,32 @@ const SHORT_VIDEO_THRESHOLD_SECONDS = 2;
 const THUMBNAIL_TIMESTAMP_RATIO = 0.1;
 const THUMBNAIL_FILENAME = 'thumbnail.jpg';
 
+/**
+ * Transient = worth retrying (storage/network down, timeout, 5xx). Anything
+ * else (missing object, ffprobe rejecting the file) is terminal.
+ */
+export function isTransientError(error: unknown): boolean {
+  const candidate = error as {
+    name?: string;
+    code?: string;
+    $metadata?: { httpStatusCode?: number };
+  };
+  const status = candidate?.$metadata?.httpStatusCode;
+  if (status !== undefined && status >= 500) {
+    return true;
+  }
+  if (candidate?.name === 'TimeoutError') {
+    return true;
+  }
+  return [
+    'ECONNREFUSED',
+    'ECONNRESET',
+    'ETIMEDOUT',
+    'EPIPE',
+    'ENOTFOUND',
+  ].includes(candidate?.code ?? '');
+}
+
 export function calculateThumbnailTimestamp(durationSeconds: number): number {
   return durationSeconds < SHORT_VIDEO_THRESHOLD_SECONDS
     ? 0
@@ -29,7 +55,7 @@ export class VideoProcessingService {
     private readonly storageService: StorageService,
   ) {}
 
-  async process(videoId: string): Promise<void> {
+  async process(videoId: string, lastAttempt = true): Promise<void> {
     const video = await this.videoRepository.findOne({
       where: { id: videoId },
     });
@@ -70,6 +96,11 @@ export class VideoProcessingService {
         `Failed to process video ${videoId}`,
         error instanceof Error ? error.stack : String(error),
       );
+      if (!lastAttempt && isTransientError(error)) {
+        // Rethrow so pg-boss requeues it; the video stays in `processing`.
+        // `finally` below still cleans the temp dir.
+        throw error;
+      }
       try {
         video.status = VideoStatus.FAILED;
         await this.videoRepository.save(video);

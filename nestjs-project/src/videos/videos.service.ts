@@ -56,6 +56,7 @@ export class VideosService {
         channel_id: channelId,
         title: dto.title,
         description: dto.description ?? null,
+        mime_type: dto.mimeType ?? null,
         size_bytes: String(dto.sizeBytes),
       }),
     );
@@ -65,6 +66,7 @@ export class VideosService {
     const { uploadId, parts } = await this.storageService.createMultipartUpload(
       storageKey,
       partCount,
+      video.mime_type ?? undefined,
     );
 
     video.storage_key = storageKey;
@@ -99,12 +101,22 @@ export class VideosService {
       parts,
     );
 
+    // pg-boss stores jobs in the same Postgres, so the status flip and the job
+    // insert share one transaction: no video can end up stuck in `processing`
+    // with no job to process it.
     video.status = VideoStatus.PROCESSING;
     video.upload_id = null;
-    await this.videoRepository.save(video);
-
-    await this.queueService.publish(VIDEO_PROCESSING_REQUESTED_EVENT, {
-      videoId: video.id,
+    await this.videoRepository.manager.transaction(async (manager) => {
+      await manager.save(video);
+      await this.queueService.publish(
+        VIDEO_PROCESSING_REQUESTED_EVENT,
+        { videoId: video.id },
+        {
+          executeSql: async (text: string, values: unknown[]) => ({
+            rows: await manager.query(text, values),
+          }),
+        },
+      );
     });
 
     return { id: video.id, status: video.status };
@@ -123,7 +135,9 @@ export class VideosService {
 
   async getStreamUrl(id: string): Promise<{ url: string; expiresAt: Date }> {
     const video = await this.findReadyVideoOrThrow(id);
-    return this.storageService.getPresignedGetUrl(video.storage_key as string);
+    return this.storageService.getPresignedGetUrl(video.storage_key as string, {
+      contentType: video.mime_type ?? undefined,
+    });
   }
 
   async getDownloadUrl(id: string): Promise<{ url: string; expiresAt: Date }> {

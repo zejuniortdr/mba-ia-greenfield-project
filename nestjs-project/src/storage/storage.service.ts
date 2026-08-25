@@ -29,7 +29,10 @@ export interface CompletedPart {
 
 @Injectable()
 export class StorageService {
+  /** Server-side calls — internal Docker endpoint. */
   private readonly client: S3Client;
+  /** Signing only — public endpoint, so the URL works outside the Compose network. */
+  private readonly presignClient: S3Client;
   private readonly bucket: string;
 
   constructor(
@@ -37,23 +40,35 @@ export class StorageService {
     private readonly config: ConfigType<typeof storageConfig>,
   ) {
     this.bucket = this.config.bucket;
-    this.client = new S3Client({
-      endpoint: this.config.endpoint,
+    const clientOptions = {
       region: this.config.region,
       forcePathStyle: this.config.forcePathStyle,
       credentials: {
         accessKeyId: this.config.accessKeyId,
         secretAccessKey: this.config.secretAccessKey,
       },
+    };
+    this.client = new S3Client({
+      ...clientOptions,
+      endpoint: this.config.endpoint,
+    });
+    this.presignClient = new S3Client({
+      ...clientOptions,
+      endpoint: this.config.publicEndpoint,
     });
   }
 
   async createMultipartUpload(
     key: string,
     partCount: number,
+    contentType?: string,
   ): Promise<{ uploadId: string; parts: UploadPart[] }> {
     const created = await this.client.send(
-      new CreateMultipartUploadCommand({ Bucket: this.bucket, Key: key }),
+      new CreateMultipartUploadCommand({
+        Bucket: this.bucket,
+        Key: key,
+        ...(contentType ? { ContentType: contentType } : {}),
+      }),
     );
     const uploadId = created.UploadId as string;
 
@@ -65,7 +80,7 @@ export class StorageService {
         UploadId: uploadId,
         PartNumber: partNumber,
       });
-      const url = await getSignedUrl(this.client, command, {
+      const url = await getSignedUrl(this.presignClient, command, {
         expiresIn: PART_PRESIGN_EXPIRATION_SECONDS,
       });
       parts.push({ partNumber, url });
@@ -91,17 +106,6 @@ export class StorageService {
         },
       }),
     );
-  }
-
-  async getObject(key: string): Promise<Buffer> {
-    const response = await this.client.send(
-      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
-    );
-    if (!response.Body) {
-      throw new Error(`Object not found or has an empty body: ${key}`);
-    }
-    const bytes = await response.Body.transformToByteArray();
-    return Buffer.from(bytes);
   }
 
   async downloadToFile(key: string, destinationPath: string): Promise<void> {
@@ -134,7 +138,7 @@ export class StorageService {
 
   async getPresignedGetUrl(
     key: string,
-    options: { attachment?: boolean } = {},
+    options: { attachment?: boolean; contentType?: string } = {},
   ): Promise<{ url: string; expiresAt: Date }> {
     const command = new GetObjectCommand({
       Bucket: this.bucket,
@@ -142,8 +146,11 @@ export class StorageService {
       ...(options.attachment
         ? { ResponseContentDisposition: 'attachment' }
         : {}),
+      ...(options.contentType
+        ? { ResponseContentType: options.contentType }
+        : {}),
     });
-    const url = await getSignedUrl(this.client, command, {
+    const url = await getSignedUrl(this.presignClient, command, {
       expiresIn: GET_PRESIGN_EXPIRATION_SECONDS,
     });
     return {

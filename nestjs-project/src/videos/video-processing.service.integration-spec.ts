@@ -128,10 +128,12 @@ describe('VideoProcessingService (integration)', () => {
     expect(updated?.duration_seconds).toBeLessThanOrEqual(6);
     expect(updated?.thumbnail_key).toBe(`videos/${video.id}/thumbnail.jpg`);
 
-    const thumbnail = await storageService.getObject(
+    const thumbnailPath = join(workDir, `thumbnail-${counter}.jpg`);
+    await storageService.downloadToFile(
       updated?.thumbnail_key as string,
+      thumbnailPath,
     );
-    expect(thumbnail.length).toBeGreaterThan(0);
+    expect((await readFile(thumbnailPath)).length).toBeGreaterThan(0);
   }, 30000);
 
   it('uses frame 0 as thumbnail for a video shorter than 2s', async () => {

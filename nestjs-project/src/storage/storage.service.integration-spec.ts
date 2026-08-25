@@ -10,6 +10,11 @@ describe('StorageService (integration)', () => {
   let storageService: StorageService;
 
   beforeAll(async () => {
+    // This suite runs inside the Compose network, so the presigned URLs it
+    // fetches must point at the internal endpoint, not the browser-facing one.
+    process.env.STORAGE_PUBLIC_ENDPOINT =
+      process.env.STORAGE_ENDPOINT ?? 'http://minio:9000';
+
     const module = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({

@@ -35,6 +35,9 @@ export class Video {
   size_bytes: string;
 
   @Column({ type: 'varchar', nullable: true })
+  mime_type: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
   storage_key: string | null;
 
   @Column({ type: 'varchar', nullable: true })

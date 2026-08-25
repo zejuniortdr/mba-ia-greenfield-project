@@ -76,3 +76,9 @@ export class VideoUploadNotCompleteException extends DomainException {
     super('VIDEO_UPLOAD_NOT_COMPLETE', 409, 'Video is not ready yet');
   }
 }
+
+export class ChannelNotFoundException extends DomainException {
+  constructor() {
+    super('CHANNEL_NOT_FOUND', 404, 'No channel found for the current user');
+  }
+}

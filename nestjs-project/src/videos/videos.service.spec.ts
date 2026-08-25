@@ -1,6 +1,5 @@
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Test } from '@nestjs/testing';
-import { Repository } from 'typeorm';
 import { VideoTooLargeException } from '../common/exceptions/domain.exception';
 import { QueueService } from '../queue/queue.service';
 import { StorageService } from '../storage/storage.service';
@@ -9,8 +8,11 @@ import { VideosService } from './videos.service';
 
 describe('VideosService — initiateUpload', () => {
   let videosService: VideosService;
-  let videoRepository: jest.Mocked<Repository<Video>>;
-  let storageService: jest.Mocked<StorageService>;
+  // Typed as the mock shape rather than jest.Mocked<Repository<Video>> so that
+  // `expect(videoRepository.save)` reads a plain jest.Mock property instead of
+  // an unbound class method (@typescript-eslint/unbound-method).
+  let videoRepository: { create: jest.Mock; save: jest.Mock };
+  let storageService: { createMultipartUpload: jest.Mock };
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -39,8 +41,10 @@ describe('VideosService — initiateUpload', () => {
     }).compile();
 
     videosService = module.get(VideosService);
-    videoRepository = module.get(getRepositoryToken(Video));
-    storageService = module.get(StorageService);
+    videoRepository = module.get<typeof videoRepository>(
+      getRepositoryToken(Video),
+    );
+    storageService = module.get<typeof storageService>(StorageService);
   });
 
   it('throws VideoTooLargeException when sizeBytes exceeds 10GB and does not create a video', async () => {
@@ -76,6 +80,7 @@ describe('VideosService — initiateUpload', () => {
     expect(storageService.createMultipartUpload).toHaveBeenCalledWith(
       'videos/video-1/original',
       1,
+      undefined,
     );
     expect(result).toEqual({
       id: 'video-1',
@@ -100,6 +105,7 @@ describe('VideosService — initiateUpload', () => {
     expect(storageService.createMultipartUpload).toHaveBeenCalledWith(
       'videos/video-2/original',
       2,
+      undefined,
     );
   });
 });

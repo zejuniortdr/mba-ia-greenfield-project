@@ -3,6 +3,7 @@ import {
   IsOptional,
   IsPositive,
   IsString,
+  Matches,
   MaxLength,
 } from 'class-validator';
 
@@ -18,4 +19,11 @@ export class CreateVideoDto {
   @IsInt()
   @IsPositive()
   sizeBytes: number;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^video\/[\w.+-]+$/, {
+    message: 'mimeType must be a video mime type',
+  })
+  mimeType?: string;
 }

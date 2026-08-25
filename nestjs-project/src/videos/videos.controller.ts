@@ -16,6 +16,7 @@ import {
 } from '@nestjs/swagger';
 import type { JwtPayload } from '../auth/auth.types';
 import { ChannelsService } from '../channels/channels.service';
+import { ChannelNotFoundException } from '../common/exceptions/domain.exception';
 import { ApiErrorEnvelope } from '../common/openapi/api-error-envelope.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
@@ -77,7 +78,7 @@ export class VideosController {
   ): Promise<InitiateUploadResult> {
     const channel = await this.channelsService.findByUserId(user.sub);
     if (!channel) {
-      throw new Error(`No channel found for user ${user.sub}`);
+      throw new ChannelNotFoundException();
     }
     return this.videosService.initiateUpload(channel.id, dto);
   }
@@ -122,7 +123,7 @@ export class VideosController {
   ): Promise<CompleteUploadResult> {
     const channel = await this.channelsService.findByUserId(user.sub);
     if (!channel) {
-      throw new Error(`No channel found for user ${user.sub}`);
+      throw new ChannelNotFoundException();
     }
     return this.videosService.completeUpload(id, channel.id, dto);
   }
