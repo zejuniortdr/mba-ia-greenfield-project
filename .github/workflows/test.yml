@@ -3,6 +3,11 @@ name: test
 on:
   pull_request:
     branches: [main, dev]
+  # Also on push to main so the suite runs against the integrated result and
+  # Codecov receives a report for the default branch — the coverage badge
+  # tracks main, and pull_request runs alone never produce one for it.
+  push:
+    branches: [main]
 
 defaults:
   run:
