@@ -1,10 +1,10 @@
 ---
 kind: phase
-name: phase-03-upload-processing
+name: phase-03-videos
 test_specs_aware: true
 sources_mtime:
-  docs/phases/phase-03-upload-processing/context.md: "2026-08-22 12:45:43.122930753 -0300"
-  docs/decisions/technical-decisions-upload-processing.md: "2026-08-22 12:44:03.661308359 -0300"
+  docs/phases/phase-03-videos/context.md: "2026-08-22 12:45:43.122930753 -0300"
+  docs/decisions/technical-decisions-phase-03-videos.md: "2026-08-22 12:44:03.661308359 -0300"
   docs/decisions/technical-decisions-openapi-docs-nestjs.md: "2026-08-22 11:54:26.309722837 -0300"
 ---
 
@@ -24,7 +24,7 @@ Entregar upload resiliente de vídeos até 10GB via multipart + presigned URLs, 
 
 **Technical actions:**
 
-1. Instalar `@aws-sdk/client-s3@^3.x`, `@aws-sdk/s3-request-presigner@^3.x` (per `upload-processing/TD-01`)
+1. Instalar `@aws-sdk/client-s3@^3.x`, `@aws-sdk/s3-request-presigner@^3.x` (per `phase-03-videos/TD-01`)
 2. Criar `src/config/storage.config.ts` com `registerAs('storage', ...)` — endpoint, bucket, region, credenciais (segue convenção `registerAs` de `phase-01-configuracao-base/TD-01`/TD-03)
 3. Adicionar validação Joi das novas env vars em `src/config/env.validation.ts` (segue `phase-01-configuracao-base/TD-02`)
 4. Criar `StorageModule` + `StorageService` (`src/storage/`) encapsulando `S3Client`, com métodos `createMultipartUpload`, `getPresignedPartUrl`, `completeMultipartUpload`, `getPresignedGetUrl`
@@ -52,7 +52,7 @@ Entregar upload resiliente de vídeos até 10GB via multipart + presigned URLs, 
 
 **Technical actions:**
 
-1. Instalar `pg-boss@^10.x` (per `upload-processing/TD-02`)
+1. Instalar `pg-boss@^10.x` (per `phase-03-videos/TD-02`)
 2. Criar `src/config/queue.config.ts` com `registerAs('queue', ...)` reaproveitando `databaseConfig` (mesma conexão Postgres, per `phase-01-configuracao-base/TD-03`)
 3. Criar `QueueModule` + `QueueService` (`src/queue/`) encapsulando instância `PgBoss`, com métodos `publish(event, payload)` e `subscribe(event, handler)`
 4. Registrar `QueueModule` como global no `AppModule`
@@ -105,9 +105,9 @@ Entregar upload resiliente de vídeos até 10GB via multipart + presigned URLs, 
 
 **Technical actions:**
 
-1. Criar `CreateVideoDto` (`originalFilename`, `mimeType`, `sizeBytes`) com `class-validator` (per `phase-02-auth/TD-06`)
+1. Criar `CreateVideoDto` (`title`, `description?`, `sizeBytes`) com `class-validator` (per `phase-02-auth/TD-06`)
 2. Criar exceção de domínio `VideoTooLargeException` (413) mapeada no exception filter existente (per `phase-02-auth/TD-07`)
-3. Implementar `VideosService.initiateUpload(channelId, dto)`: valida `sizeBytes <= 10737418240` (senão lança `VideoTooLargeException`, per `upload-processing/TD-05` revision 2026-08-22), cria `Video` com `status: 'draft'`, chama `StorageService.createMultipartUpload` + `getPresignedPartUrl` por parte (per `upload-processing/TD-01`, `upload-processing/TD-05`)
+3. Implementar `VideosService.initiateUpload(channelId, dto)`: valida `sizeBytes <= 10737418240` (senão lança `VideoTooLargeException`, per `phase-03-videos/TD-05` revision 2026-08-22), cria `Video` com `status: 'draft'`, chama `StorageService.createMultipartUpload` + `getPresignedPartUrl` por parte (per `phase-03-videos/TD-01`, `phase-03-videos/TD-05`)
 
 **Tests:**
 
@@ -132,7 +132,7 @@ Entregar upload resiliente de vídeos até 10GB via multipart + presigned URLs, 
 **Technical actions:**
 
 1. Criar `VideosController` com `POST /videos` (per `## Technical Specifications → API Contracts`), protegido pelo `JwtAuthGuard` global (autenticado, dono = canal do usuário)
-2. Implementar `POST /videos/:id/complete`: busca `Video` por `id` + `channel_id` do usuário autenticado (404 `VIDEO_NOT_FOUND` se não achar ou não pertencer), valida que `status` ainda é `draft`/`uploading` (409 `VIDEO_UPLOAD_ALREADY_COMPLETED` se já processado), chama `StorageService.completeMultipartUpload`, atualiza `status: 'processing'`, publica `video.processing.requested` via `QueueService` (per `upload-processing/TD-02`)
+2. Implementar `POST /videos/:id/complete`: busca `Video` por `id` + `channel_id` do usuário autenticado (404 `VIDEO_NOT_FOUND` se não achar ou não pertencer), valida que `status` ainda é `draft`/`uploading` (409 `VIDEO_UPLOAD_ALREADY_COMPLETED` se já processado), chama `StorageService.completeMultipartUpload`, atualiza `status: 'processing'`, publica `video.processing.requested` via `QueueService` (per `phase-03-videos/TD-02`)
 3. Adicionar decorators `@ApiOperation`/`@ApiResponse` (per `openapi-docs-nestjs/TD-01`)
 
 **Tests:**
@@ -159,7 +159,7 @@ Entregar upload resiliente de vídeos até 10GB via multipart + presigned URLs, 
 
 **Technical actions:**
 
-1. Criar `src/worker.main.ts` com `NestFactory.createApplicationContext(WorkerModule)` (per `upload-processing/TD-03`)
+1. Criar `src/worker.main.ts` com `NestFactory.createApplicationContext(WorkerModule)` (per `phase-03-videos/TD-03`)
 2. Criar `WorkerModule` importando `QueueModule`, `StorageModule`, `TypeOrmModule.forFeature([Video])`
 3. Registrar consumer via `QueueService.subscribe('video.processing.requested', handler)` no bootstrap do worker
 4. Adicionar `Dockerfile.worker` (ou target multi-stage) + serviço `video-worker` no `compose.yaml`, dependente de `db` e `minio`
@@ -182,9 +182,9 @@ Entregar upload resiliente de vídeos até 10GB via multipart + presigned URLs, 
 
 **Technical actions:**
 
-1. Instalar `fluent-ffmpeg@^2.x` + binário `ffmpeg`/`ffprobe` na imagem Docker do worker (`Dockerfile.worker`, per `upload-processing/TD-04`)
-2. Implementar `VideoProcessingService.process(videoId)`: baixa/lê o vídeo do storage, roda `ffprobe` pra extrair `duration_seconds`, roda `ffmpeg -ss {10% da duração}` pra extrair o frame de thumbnail com fallback pro frame 0 se o vídeo tiver menos de 2s (per `upload-processing/TD-04` revision 2026-08-22)
-3. Fazer upload do thumbnail gerado pro storage via `StorageService` (per `upload-processing/TD-01`) e salvar `thumbnail_key`
+1. Instalar `fluent-ffmpeg@^2.x` + binário `ffmpeg`/`ffprobe` na imagem Docker do worker (`Dockerfile.worker`, per `phase-03-videos/TD-04`)
+2. Implementar `VideoProcessingService.process(videoId)`: baixa/lê o vídeo do storage, roda `ffprobe` pra extrair `duration_seconds`, roda `ffmpeg -ss {10% da duração}` pra extrair o frame de thumbnail com fallback pro frame 0 se o vídeo tiver menos de 2s (per `phase-03-videos/TD-04` revision 2026-08-22)
+3. Fazer upload do thumbnail gerado pro storage via `StorageService` (per `phase-03-videos/TD-01`) e salvar `thumbnail_key`
 4. Atualizar `Video.status` para `ready` ao final, ou `failed` em caso de erro no processamento
 
 **Tests:**
@@ -212,7 +212,7 @@ Entregar upload resiliente de vídeos até 10GB via multipart + presigned URLs, 
 **Technical actions:**
 
 1. Implementar `VideosService.getStreamUrl(id)` / `getDownloadUrl(id)`: busca o `Video`, valida `status: 'ready'` (senão 409 `VIDEO_UPLOAD_NOT_COMPLETE`), gera presigned GET URL via `StorageService` (com `Content-Disposition: attachment` pro download)
-2. Adicionar `GET /videos/:id/stream-url` e `GET /videos/:id/download-url` no `VideosController`, marcados `@Public()` (per `upload-processing/TD-06` revision 2026-08-22)
+2. Adicionar `GET /videos/:id/stream-url` e `GET /videos/:id/download-url` no `VideosController`, marcados `@Public()` (per `phase-03-videos/TD-06` revision 2026-08-22)
 
 **Tests:**
 
@@ -239,16 +239,16 @@ Entregar upload resiliente de vídeos até 10GB via multipart + presigned URLs, 
 
 | Field | Type | Constraints |
 |-------|------|-------------|
-| id | uuid | PK, generated _(per upload-processing/TD-07)_ |
+| id | uuid | PK, generated _(per phase-03-videos/TD-07)_ |
 | channel_id | uuid | FK → Channel, not null |
 | status | varchar | not null, default `draft` — one of `draft \| uploading \| processing \| ready \| failed` |
-| storage_key | varchar | not null — object key of the final video file in the bucket _(per upload-processing/TD-01)_ |
-| upload_id | varchar | nullable — S3 multipart upload id, cleared after `CompleteMultipartUpload` _(per upload-processing/TD-05)_ |
+| storage_key | varchar | not null — object key of the final video file in the bucket _(per phase-03-videos/TD-01)_ |
+| upload_id | varchar | nullable — S3 multipart upload id, cleared after `CompleteMultipartUpload` _(per phase-03-videos/TD-05)_ |
 | original_filename | varchar | not null |
 | mime_type | varchar | not null |
-| size_bytes | bigint | not null — validated ≤ 10GB before upload starts _(per upload-processing/TD-05 revision 2026-08-22)_ |
-| duration_seconds | integer | nullable — populated after processing _(per upload-processing/TD-04)_ |
-| thumbnail_key | varchar | nullable — object key of the generated thumbnail, frame at 10% da duração _(per upload-processing/TD-04 revision 2026-08-22)_ |
+| size_bytes | bigint | not null — validated ≤ 10GB before upload starts _(per phase-03-videos/TD-05 revision 2026-08-22)_ |
+| duration_seconds | integer | nullable — populated after processing _(per phase-03-videos/TD-04)_ |
+| thumbnail_key | varchar | nullable — object key of the generated thumbnail, frame at 10% da duração _(per phase-03-videos/TD-04 revision 2026-08-22)_ |
 | created_at | timestamptz | default now() |
 | updated_at | timestamptz | default now(), updated on change |
 
@@ -259,15 +259,15 @@ Entregar upload resiliente de vídeos até 10GB via multipart + presigned URLs, 
 
 ### API Contracts
 
-#### POST /videos (SI-03.3)
+#### POST /videos (SI-03.5)
 
 **Request headers:**
 - Authorization: Bearer <access_token>
 - Content-Type: application/json
 
 **Request body:**
-- originalFilename: string, required
-- mimeType: string, required
+- title: string, required — max 100 chars
+- description: string, optional
 - sizeBytes: number, required — max 10737418240 (10GB)
 
 **Response 201:**
@@ -281,7 +281,7 @@ Entregar upload resiliente de vídeos até 10GB via multipart + presigned URLs, 
 
 ---
 
-#### POST /videos/:id/complete (SI-03.3)
+#### POST /videos/:id/complete (SI-03.5)
 
 **Request headers:**
 - Authorization: Bearer <access_token>
@@ -301,10 +301,10 @@ Entregar upload resiliente de vídeos até 10GB via multipart + presigned URLs, 
 
 ---
 
-#### GET /videos/:id/stream-url (SI-03.6)
+#### GET /videos/:id/stream-url (SI-03.8)
 
 **Response 200:**
-- url: string — presigned GET URL do storage, com suporte a `Range` requests _(per upload-processing/TD-06)_
+- url: string — presigned GET URL do storage, com suporte a `Range` requests _(per phase-03-videos/TD-06)_
 - expiresAt: string (ISO-8601)
 
 **Error responses:**
@@ -313,7 +313,7 @@ Entregar upload resiliente de vídeos até 10GB via multipart + presigned URLs, 
 
 ---
 
-#### GET /videos/:id/download-url (SI-03.6)
+#### GET /videos/:id/download-url (SI-03.8)
 
 **Response 200:**
 - url: string — presigned GET URL do storage, com `Content-Disposition: attachment`
@@ -331,8 +331,8 @@ Entregar upload resiliente de vídeos até 10GB via multipart + presigned URLs, 
 |----------|-----------|---------------|-------|
 | POST /videos | ✗ | ✓ | — _(vídeo criado no canal do usuário autenticado)_ |
 | POST /videos/:id/complete | ✗ | ✓ | ✓ _(apenas o canal dono do vídeo)_ |
-| GET /videos/:id/stream-url | ✓ | ✓ | — _(público — per upload-processing/TD-06 revision 2026-08-22, consistente com acesso anônimo do projeto)_ |
-| GET /videos/:id/download-url | ✓ | ✓ | — _(público — per upload-processing/TD-06 revision 2026-08-22)_ |
+| GET /videos/:id/stream-url | ✓ | ✓ | — _(público — per phase-03-videos/TD-06 revision 2026-08-22, consistente com acesso anônimo do projeto)_ |
+| GET /videos/:id/download-url | ✓ | ✓ | — _(público — per phase-03-videos/TD-06 revision 2026-08-22)_ |
 
 _POST /videos e POST /videos/:id/complete exigem autenticação por necessidade estrutural — o rascunho do vídeo é criado no canal do usuário autenticado (nenhuma TD decidiu isso explicitamente; é consequência direta de um vídeo pertencer a um canal, que por sua vez pertence a um usuário)._
 
@@ -342,7 +342,7 @@ _POST /videos e POST /videos/:id/complete exigem autenticação por necessidade 
 
 | errorCode | HTTP | Trigger |
 |-----------|------|---------|
-| VIDEO_TOO_LARGE | 413 | POST /videos quando `sizeBytes` excede 10GB (per upload-processing/TD-05 revision 2026-08-22) |
+| VIDEO_TOO_LARGE | 413 | POST /videos quando `sizeBytes` excede 10GB (per phase-03-videos/TD-05 revision 2026-08-22) |
 | VIDEO_NOT_FOUND | 404 | Operação referenciando `:id` que não existe ou não pertence ao usuário autenticado |
 | VIDEO_UPLOAD_ALREADY_COMPLETED | 409 | POST /videos/:id/complete chamado em vídeo cujo upload já foi completado |
 | VIDEO_UPLOAD_NOT_COMPLETE | 409 | GET stream-url ou download-url chamado antes do vídeo atingir status `ready` |
@@ -361,10 +361,10 @@ _Formato de erro herdado de `phase-02-auth/TD-07` — `{ statusCode, error, mess
 { "videoId": "uuid" }
 ```
 
-**Producer:** `VideosService` (per upload-processing/TD-05)
-**Consumer:** `VideoProcessingWorker` (per upload-processing/TD-03)
+**Producer:** `VideosService` (per phase-03-videos/TD-05)
+**Consumer:** `VideoProcessingWorker` (per phase-03-videos/TD-03)
 **Trigger:** disparado quando `POST /videos/:id/complete` completa com sucesso o multipart upload no storage
-**Delivery semantics:** at-least-once — pg-boss reenfileira em caso de falha do worker (per upload-processing/TD-02)
+**Delivery semantics:** o handler distingue erro transitório de erro definitivo (per phase-03-videos/TD-02): falha transitória (ex.: storage indisponível, timeout de rede) relança o erro, e o pg-boss reenfileira o job via `retryLimit`/`retryBackoff`; erro definitivo (ex.: arquivo corrompido, ffprobe sem duração) é capturado, marca o vídeo como `failed` e não é relançado — o job é dado como concluído, sem retry.
 
 ---
 
@@ -387,14 +387,14 @@ SI-03.3 (root — Video entity)
 
 ## Deliverables
 
-- [ ] SI-03.1 — Infra: storage client (AWS SDK v3) + módulo
-- [ ] SI-03.2 — Infra: fila pg-boss + módulo
-- [ ] SI-03.3 — Entity Video + migration
-- [ ] SI-03.4 — VideosService: iniciar upload (rascunho + multipart)
-- [ ] SI-03.5 — VideosController: POST /videos, POST /videos/:id/complete
-- [ ] SI-03.6 — Video Worker: app standalone + consumer da fila
-- [ ] SI-03.7 — Worker: extração de metadados e thumbnail (fluent-ffmpeg)
-- [ ] SI-03.8 — VideosService + Controller: streaming e download público
+- [x] SI-03.1 — Infra: storage client (AWS SDK v3) + módulo
+- [x] SI-03.2 — Infra: fila pg-boss + módulo
+- [x] SI-03.3 — Entity Video + migration
+- [x] SI-03.4 — VideosService: iniciar upload (rascunho + multipart)
+- [x] SI-03.5 — VideosController: POST /videos, POST /videos/:id/complete
+- [x] SI-03.6 — Video Worker: app standalone + consumer da fila
+- [x] SI-03.7 — Worker: extração de metadados e thumbnail (fluent-ffmpeg)
+- [x] SI-03.8 — VideosService + Controller: streaming e download público
 
 **Full test suites:**
 

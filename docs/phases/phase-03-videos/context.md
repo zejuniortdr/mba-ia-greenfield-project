@@ -1,9 +1,9 @@
 ---
 kind: phase
-name: phase-03-upload-processing
+name: phase-03-videos
 sources_mtime:
   docs/project-plan.md: "2026-08-22 11:54:26.314722868 -0300"
-  docs/decisions/technical-decisions-upload-processing.md: "2026-08-22 12:44:03.661308359 -0300"
+  docs/decisions/technical-decisions-phase-03-videos.md: "2026-08-22 12:44:03.661308359 -0300"
   docs/decisions/technical-decisions-openapi-docs-nestjs.md: "2026-08-22 11:54:26.309722837 -0300"
   docs/phases/phase-01-configuracao-base/context.md: "2026-08-22 11:54:26.312811778 -0300"
   docs/phases/phase-02-auth/context.md: "2026-08-22 11:54:26.313722861 -0300"
@@ -11,7 +11,7 @@ sources_mtime:
   .claude/skills/testing-guide-nestjs-project/SKILL.md: "2026-08-22 11:54:26.200722161 -0300"
 ---
 
-# phase-03-upload-processing — Context
+# phase-03-videos — Context
 
 ## Scope
 
@@ -48,53 +48,53 @@ sources_mtime:
 
 | Ref | Source | Scope | Topic | Status | Decision | Libraries |
 |-----|--------|-------|-------|--------|----------|-----------|
-| upload-processing/TD-01 | phase | Backend | Object Storage Backend & Client | decided | A (AWS SDK v3) | — |
-| upload-processing/TD-02 | phase | Backend | Background Job Queue Technology | decided | B (pg-boss) | — |
-| upload-processing/TD-03 | phase | Backend | Video Processing Worker Deployment Topology | decided | A (App NestJS standalone separada) | — |
-| upload-processing/TD-04 | phase | Backend | Video Metadata & Thumbnail Extraction Tool | decided | A (fluent-ffmpeg) | — |
+| phase-03-videos/TD-01 | phase | Backend | Object Storage Backend & Client | decided | A (AWS SDK v3) | — |
+| phase-03-videos/TD-02 | phase | Backend | Background Job Queue Technology | decided | B (pg-boss) | — |
+| phase-03-videos/TD-03 | phase | Backend | Video Processing Worker Deployment Topology | decided | A (App NestJS standalone separada) | — |
+| phase-03-videos/TD-04 | phase | Backend | Video Metadata & Thumbnail Extraction Tool | decided | A (fluent-ffmpeg) | — |
 |     └─ Last revision: 2026-08-22 — Frame do thumbnail extraído a 10% da duração do vídeo (`ffmpeg -ss {10%*duration… | | | | | | |
-| upload-processing/TD-05 | phase | Cross-layer | Large Video Upload Transport Protocol | decided | A (Multipart upload com presigned URLs por parte) | — |
+| phase-03-videos/TD-05 | phase | Cross-layer | Large Video Upload Transport Protocol | decided | A (Multipart upload com presigned URLs por parte) | — |
 |     └─ Last revision: 2026-08-22 — Upload acima de 10GB é rejeitado antes de iniciar: API valida o tamanho declarad… | | | | | | |
-| upload-processing/TD-06 | phase | Backend | Streaming & Download Delivery Mechanism | decided | A (Presigned GET URL) | — |
+| phase-03-videos/TD-06 | phase | Backend | Streaming & Download Delivery Mechanism | decided | A (Presigned GET URL) | — |
 |     └─ Last revision: 2026-08-22 — Endpoints de streaming e download são públicos (`@Public()`, sem JWT). | | | | | | |
-| upload-processing/TD-07 | phase | Backend | Video Entity Primary Key / URL Identifier Strategy | decided | A (UUID) | — |
+| phase-03-videos/TD-07 | phase | Backend | Video Entity Primary Key / URL Identifier Strategy | decided | A (UUID) | — |
 
 _Source files:_
 
-- upload-processing — `docs/decisions/technical-decisions-upload-processing.md` (scope_type: phase, related_phases: [3])
+- phase-03-videos — `docs/decisions/technical-decisions-phase-03-videos.md` (scope_type: phase, related_phases: [3])
 
 ## Capability Coverage
 
 | Capability (from project-plan.md) | Covered by |
 |-----------------------------------|------------|
-| Serviço de armazenamento de arquivos (vídeos e thumbnails) | upload-processing/TD-01 |
-| Serviço de processamento em segundo plano (filas) | upload-processing/TD-02, upload-processing/TD-03 |
-| Upload de vídeos com suporte a arquivos de até 10GB sem impacto na performance | upload-processing/TD-05 |
-| Pré-cadastro automático do vídeo como rascunho ao iniciar o upload | upload-processing/TD-05 |
-| Processamento automático do vídeo após upload (extração de duração e metadados) | upload-processing/TD-03, upload-processing/TD-04 |
-| Geração automática de thumbnail a partir de um frame do vídeo | upload-processing/TD-04 |
-| URL única por vídeo, sem conflito com outros vídeos | upload-processing/TD-07 |
-| Reprodução via streaming (sem necessidade de download completo) | upload-processing/TD-06 |
-| Download do vídeo pelo usuário | upload-processing/TD-06 |
+| Serviço de armazenamento de arquivos (vídeos e thumbnails) | phase-03-videos/TD-01 |
+| Serviço de processamento em segundo plano (filas) | phase-03-videos/TD-02, phase-03-videos/TD-03 |
+| Upload de vídeos com suporte a arquivos de até 10GB sem impacto na performance | phase-03-videos/TD-05 |
+| Pré-cadastro automático do vídeo como rascunho ao iniciar o upload | phase-03-videos/TD-05 |
+| Processamento automático do vídeo após upload (extração de duração e metadados) | phase-03-videos/TD-03, phase-03-videos/TD-04 |
+| Geração automática de thumbnail a partir de um frame do vídeo | phase-03-videos/TD-04 |
+| URL única por vídeo, sem conflito com outros vídeos | phase-03-videos/TD-07 |
+| Reprodução via streaming (sem necessidade de download completo) | phase-03-videos/TD-06 |
+| Download do vídeo pelo usuário | phase-03-videos/TD-06 |
 
 ## Decisions Detail
 
-### upload-processing/TD-01
+### phase-03-videos/TD-01
 
 **Recommendation:** o projeto já documentou MinIO em dev e S3 em prod como o mesmo container lógico; usar o SDK da AWS contra o endpoint do MinIO evita reescrever a camada de storage quando migrar para S3 real, e cobre tanto multipart upload quanto presigned URLs necessários para TD-05.
 **Libraries:** —
 
-### upload-processing/TD-02
+### phase-03-videos/TD-02
 
 **Recommendation:** o projeto não tem Redis nem RabbitMQ em nenhuma fase anterior, e o volume de jobs (1 processamento por vídeo enviado) não justifica novo serviço de infra; pg-boss aproveita o Postgres 17 já rodando e mantém o compose enxuto. Se o volume de jobs crescer, é uma decisão revisável (Supersede) nas fases seguintes.
 **Libraries:** —
 
-### upload-processing/TD-03
+### phase-03-videos/TD-03
 
 **Recommendation:** mantém a separação já documentada no diagrama de arquitetura e evita que o processamento pesado de ffmpeg compita por CPU/event loop com a API que serve requests HTTP.
 **Libraries:** —
 
-### upload-processing/TD-04
+### phase-03-videos/TD-04
 
 **Recommendation:** o README já define FFmpeg como a ferramenta do Video Worker; o wrapper evita reimplementar parsing de comandos/saída do CLI que o `child_process` puro exigiria.
 **Libraries:** —
@@ -102,7 +102,7 @@ _Source files:_
 **Revisions:**
 - 2026-08-22 — Frame do thumbnail extraído a 10% da duração do vídeo (`ffmpeg -ss {10%*duration}`), com fallback pro frame 0 quando o vídeo for curto demais (<2s) pro cálculo fazer sentido. Rationale: 10% da duração evita frame preto de abertura comum em vídeos, mais representativo que timestamp fixo.
 
-### upload-processing/TD-05
+### phase-03-videos/TD-05
 
 **Recommendation:** é o único caminho que cumpre as duas restrições dos Pontos de Atenção simultaneamente (upload de 10GB sem travar o sistema E retomada por parte após falha), e reaproveita o multipart upload que o AWS SDK v3 (TD-01) já oferece sem infra adicional. A exceção ao modelo BFF é pontual (só o PUT dos bytes) — a Fase 04, ao desenhar a tela de upload, decide como orquestrar isso a partir de Route Handlers que só repassam as presigned URLs recebidas da API.
 **Libraries:** —
@@ -110,7 +110,7 @@ _Source files:_
 **Revisions:**
 - 2026-08-22 — Upload acima de 10GB é rejeitado antes de iniciar: API valida o tamanho declarado no pré-cadastro do rascunho e retorna 413 antes de chamar `CreateMultipartUpload`. Rationale: evita reservar recursos de storage (bucket, multipart upload id) pra um upload que já se sabe que vai violar o limite do projeto.
 
-### upload-processing/TD-06
+### phase-03-videos/TD-06
 
 **Recommendation:** consistente com a decisão de TD-05 de manter bytes fora do caminho crítico da API; o storage S3-compatible já resolve `Range` requests corretamente, e presigned URLs com expiração curta mitigam a exposição direta.
 **Libraries:** —
@@ -118,7 +118,7 @@ _Source files:_
 **Revisions:**
 - 2026-08-22 — Endpoints de streaming e download são públicos (`@Public()`, sem JWT). Rationale: consistente com o requisito "acesso anônimo" documentado na visão geral do projeto (`docs/project-plan.md` § 1 — "qualquer pessoa pode assistir vídeos sem cadastro"); a presigned URL já tem expiração curta como camada de proteção.
 
-### upload-processing/TD-07
+### phase-03-videos/TD-07
 
 **Recommendation:** é a única opção consistente com a convenção já estabelecida em todas as entidades do projeto e com o requisito (Fase 05) de vídeos unlisted não-descobríveis por enumeração; Option B é tecnicamente inadequada para este caso de uso, não uma alternativa real.
 **Libraries:** —

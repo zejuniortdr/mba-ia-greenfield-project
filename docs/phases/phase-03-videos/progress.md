@@ -1,7 +1,7 @@
-# phase-03-upload-processing — Progress
+# phase-03-videos — Progress
 
-**Status:** in_progress
-**SIs:** 7/8 completed
+**Status:** completed
+**SIs:** 8/8 completed
 
 ### SI-03.1 — Infra: storage client (AWS SDK v3) + módulo
 - **Status:** completed
@@ -71,6 +71,7 @@
   - `worker.main.ts` (SI-03.6) atualizado: handler do consumer agora chama `VideoProcessingService.process(videoId)` de verdade, em vez do placeholder de log.
 
 ### SI-03.8 — VideosService + Controller: streaming e download público
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 6 passing (e2e — `test/videos-streaming.e2e-spec.ts`)
+- **Observations:**
+  - Commits: `9d0d724` (`VideosService.getStreamUrl`/`getDownloadUrl`, parte 1), `3152b7f` (`GET /videos/:id/stream-url` e `/download-url` públicos no controller), `0d0ed26` (fix de robustez em `videos.service.ts`).
