@@ -149,6 +149,14 @@ NestJS with standard module structure. Source lives in `src/`, compiled output i
 - Each domain feature gets its own module (e.g., `UsersModule`, `VideosModule`) registered in `AppModule`
 - Controllers handle HTTP routing; Services hold business logic; both are scoped to their module
 
+### Videos module (upload & processing)
+
+- `src/videos/` — `VideosController` (`POST /videos`, `POST /videos/:id/complete`, `GET /videos/:id/stream-url` public, `GET /videos/:id/download-url` public) + `VideosService` (draft/multipart lifecycle) + `VideoProcessingService` (worker-side: ffmpeg metadata/thumbnail extraction).
+- `src/storage/` — `StorageModule`/`StorageService`: multipart upload, presigned GET/PUT, `downloadToFile`, against MinIO/S3 via `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner`.
+- `src/queue/` — `QueueModule` (`@Global`) / `QueueService`: thin wrapper over `pg-boss` (`publish`/`subscribe`), jobs persisted in PostgreSQL.
+- `src/worker.main.ts` — standalone entrypoint (`NestFactory.createApplicationContext(WorkerModule)`), no HTTP server; built/run via `Dockerfile.worker` and started with `npm run start:worker`. Subscribes to `video.processing.requested` and delegates to `VideoProcessingService.process`.
+- Compose services for this phase: `minio` (S3-compatible storage), `minio-init` (creates the `streamtube-videos` bucket), `video-worker` (runs the worker image).
+
 ## Code Conventions
 
 - **TypeScript:** `nodenext` module resolution, `ES2023` target, `strictNullChecks` on, `noImplicitAny` off

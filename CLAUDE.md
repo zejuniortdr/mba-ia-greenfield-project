@@ -23,8 +23,20 @@ See `docs/diagrams/software-arch.mermaid` for the full diagram. Key containers:
 - **Video Worker** (FFmpeg) → consumes jobs from queue, processes videos, updates DB and storage
 - **Database** (PostgreSQL) → users, channels, videos, comments, likes
 - **Object Storage** (S3/MinIO) → video files and thumbnails
-- **Message Queue** (TBD) → video processing job queue
+- **Message Queue** (pg-boss over PostgreSQL) → video processing job queue
 - **Email Service** (SMTP) → account confirmation and password recovery
+
+## Video Upload & Processing (Phase 03)
+
+- `videos/` module — 4 endpoints:
+  - `POST /videos` — creates a draft video in the caller's channel, starts an S3/MinIO multipart upload, returns presigned PUT URLs per part.
+  - `POST /videos/:id/complete` — completes the multipart upload, moves the video to `processing`, and publishes `video.processing.requested` to the queue.
+  - `GET /videos/:id/stream-url` — public, presigned GET URL for streaming.
+  - `GET /videos/:id/download-url` — public, presigned GET URL with `Content-Disposition: attachment`.
+- `storage/` module — `StorageModule`/`StorageService`, wraps `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner` against MinIO (S3-compatible).
+- `queue/` module — `QueueModule` (`@Global`) / `QueueService`, wraps `pg-boss` (jobs stored in PostgreSQL, no separate broker).
+- **Video Worker** — standalone Nest application context (`nestjs-project/src/worker.main.ts`, built via `Dockerfile.worker`), subscribes to `video.processing.requested` and runs `VideoProcessingService` (ffmpeg: metadata + thumbnail extraction).
+- Compose services added for this phase: `minio` (S3-compatible object storage), `minio-init` (bucket bootstrap), `video-worker` (runs the worker image).
 
 ## Docker Networking
 
