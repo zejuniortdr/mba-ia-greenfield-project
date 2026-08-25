@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { promisify } from 'util';
+import { Logger } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Test } from '@nestjs/testing';
@@ -150,6 +151,10 @@ describe('VideoProcessingService (integration)', () => {
   }, 30000);
 
   it('marks the video as failed when the storage object does not exist, without throwing', async () => {
+    // the failure path logs the S3 error on purpose; keep it out of the test output
+    const loggerError = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
     const video = await createDraftVideo(`test/missing-${counter}.mp4`);
 
     await expect(
@@ -158,5 +163,7 @@ describe('VideoProcessingService (integration)', () => {
 
     const updated = await videoRepository.findOneBy({ id: video.id });
     expect(updated?.status).toBe(VideoStatus.FAILED);
+    expect(loggerError).toHaveBeenCalled();
+    loggerError.mockRestore();
   }, 30000);
 });
