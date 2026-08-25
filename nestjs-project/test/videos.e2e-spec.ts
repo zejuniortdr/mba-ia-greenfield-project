@@ -5,10 +5,20 @@ import { App } from 'supertest/types';
 import { DataSource } from 'typeorm';
 import { ThrottlerStorage, ThrottlerStorageService } from '@nestjs/throttler';
 import { AppModule } from '../src/app.module';
-import { AuthService } from '../src/auth/auth.service';
+import { MailService } from '../src/mail/mail.service';
 import { DomainExceptionFilter } from '../src/common/filters/domain-exception.filter';
 import { ValidationExceptionFilter } from '../src/common/filters/validation-exception.filter';
 import { cleanAllTables } from '../src/test/create-test-data-source';
+
+interface InitiateUploadBody {
+  id: string;
+  uploadId: string;
+  parts: { partNumber: number; url: string }[];
+}
+
+interface ErrorBody {
+  error: string;
+}
 
 describe('Videos (e2e)', () => {
   let app: INestApplication<App>;
@@ -16,6 +26,11 @@ describe('Videos (e2e)', () => {
   let throttlerStorage: ThrottlerStorageService;
 
   beforeAll(async () => {
+    // This suite runs inside the Compose network, so the presigned URLs it
+    // uploads to must point at the internal endpoint, not the browser-facing one.
+    process.env.STORAGE_PUBLIC_ENDPOINT =
+      process.env.STORAGE_ENDPOINT ?? 'http://minio:9000';
+
     const moduleFixture = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -53,13 +68,13 @@ describe('Videos (e2e)', () => {
     const email = `videos_e2e_${++counter}@example.com`;
     const password = 'password123';
 
-    const authService = app.get(AuthService);
-    const mailServiceInstance = (authService as any).mailService;
+    const mailService = app.get(MailService);
     let capturedToken = '';
     jest
-      .spyOn(mailServiceInstance, 'sendConfirmationEmail')
-      .mockImplementationOnce(async (_e: string, _n: string, t: string) => {
+      .spyOn(mailService, 'sendConfirmationEmail')
+      .mockImplementationOnce((_e: string, _n: string, t: string) => {
         capturedToken = t;
+        return Promise.resolve();
       });
     await request(app.getHttpServer())
       .post('/auth/register')
@@ -70,7 +85,7 @@ describe('Videos (e2e)', () => {
     const res = await request(app.getHttpServer())
       .post('/auth/login')
       .send({ email, password });
-    return res.body.access_token;
+    return (res.body as { access_token: string }).access_token;
   }
 
   describe('POST /videos', () => {
@@ -83,11 +98,12 @@ describe('Videos (e2e)', () => {
         .send({ title: 'My Video', sizeBytes: 1000 })
         .expect(201);
 
-      expect(res.body.id).toBeDefined();
-      expect(res.body.uploadId).toBeDefined();
-      expect(res.body.parts).toHaveLength(1);
-      expect(res.body.parts[0].partNumber).toBe(1);
-      expect(res.body.parts[0].url).toBeDefined();
+      const body = res.body as InitiateUploadBody;
+      expect(body.id).toBeDefined();
+      expect(body.uploadId).toBeDefined();
+      expect(body.parts).toHaveLength(1);
+      expect(body.parts[0].partNumber).toBe(1);
+      expect(body.parts[0].url).toBeDefined();
     });
 
     it('returns 413 with VIDEO_TOO_LARGE when sizeBytes exceeds 10GB', async () => {
@@ -99,7 +115,7 @@ describe('Videos (e2e)', () => {
         .send({ title: 'Too Big', sizeBytes: 10_737_418_241 })
         .expect(413);
 
-      expect(res.body.error).toBe('VIDEO_TOO_LARGE');
+      expect((res.body as ErrorBody).error).toBe('VIDEO_TOO_LARGE');
     });
   });
 
@@ -112,7 +128,7 @@ describe('Videos (e2e)', () => {
         .set('Authorization', `Bearer ${token}`)
         .send({ title: 'My Video', sizeBytes: 1000 });
 
-      const { id, parts } = initiateRes.body;
+      const { id, parts } = initiateRes.body as InitiateUploadBody;
       const putResponse = await fetch(parts[0].url, {
         method: 'PUT',
         body: Buffer.from('video bytes'),
@@ -144,7 +160,7 @@ describe('Videos (e2e)', () => {
         .send({ parts: [{ partNumber: 1, etag: 'etag' }] })
         .expect(404);
 
-      expect(res.body.error).toBe('VIDEO_NOT_FOUND');
+      expect((res.body as ErrorBody).error).toBe('VIDEO_NOT_FOUND');
     });
 
     it('returns 409 with VIDEO_UPLOAD_ALREADY_COMPLETED on the second call', async () => {
@@ -163,7 +179,9 @@ describe('Videos (e2e)', () => {
         .send({ parts: [{ partNumber, etag }] })
         .expect(409);
 
-      expect(res.body.error).toBe('VIDEO_UPLOAD_ALREADY_COMPLETED');
+      expect((res.body as ErrorBody).error).toBe(
+        'VIDEO_UPLOAD_ALREADY_COMPLETED',
+      );
     });
   });
 });
