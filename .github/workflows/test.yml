@@ -54,7 +54,11 @@ jobs:
       mailpit:
         image: axllent/mailpit
         ports:
+          # 1025 is SMTP (sending), 8025 is the HTTP API the integration tests
+          # read the mailbox through. Publishing only 1025 lets mail go out but
+          # makes every assertion on the delivered message fail to connect.
           - 1025:1025
+          - 8025:8025
 
     steps:
       - uses: actions/checkout@v4
@@ -67,6 +71,12 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      # The Compose images install ffmpeg (Dockerfile.dev, Dockerfile.worker);
+      # GitHub-hosted runners do not ship it, so video processing fails with
+      # "spawn ffmpeg ENOENT" without this.
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Start MinIO
         run: |
