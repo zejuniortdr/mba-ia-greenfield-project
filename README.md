@@ -1,6 +1,10 @@
 # StreamTube — Plataforma de Compartilhamento de Vídeos
 
-[![test](https://github.com/zejuniortdr/mba-ia-greenfield-project/actions/workflows/test.yml/badge.svg)](https://github.com/zejuniortdr/mba-ia-greenfield-project/actions/workflows/test.yml)
+[![test](https://github.com/zejuniortdr/mba-ia-greenfield-project/actions/workflows/test.yml/badge.svg)](https://github.com/zejuniortdr/mba-ia-greenfield-project/actions/workflows/test.yml) [![codecov](https://codecov.io/gh/zejuniortdr/mba-ia-greenfield-project/branch/main/graph/badge.svg)](https://codecov.io/gh/zejuniortdr/mba-ia-greenfield-project)
+
+![NestJS](https://img.shields.io/badge/NestJS-11-E0234E?logo=nestjs&logoColor=white) ![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs&logoColor=white) ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white) ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white) ![Fase 03](https://img.shields.io/badge/Fase%2003-conclu%C3%ADda-success)
+
+
 
 Projeto da disciplina **Desenvolvimento de Aplicações de IA** do MBA de Engenharia de Software com IA da [Full Cycle](https://fullcycle.com.br).
 
